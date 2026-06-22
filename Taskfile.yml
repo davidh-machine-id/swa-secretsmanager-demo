@@ -1,0 +1,213 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+dotenv: ["setup.env"]
+
+tasks:
+  # ============================================================
+  # INITIALIZATION & SETUP
+  # ============================================================
+
+  bootstrap:
+    desc: Validate prerequisites, setup.env, and Azure authentication
+    cmds:
+      - bash ./scripts/bootstrap.sh
+
+  # ============================================================
+  # CLI LOGIN
+  # ============================================================
+
+  conjur:init:
+    desc: Initialize secrets manager cli
+    preconditions:
+      - sh: test -n "${CONJUR_APPLIANCE_URL}"
+        msg: "CONJUR_APPLIANCE_URL not set - update setup.env"
+    cmds:
+      - conjur init saas -u $CONJUR_APPLIANCE_URL
+  conjur:login:
+    desc: Login to secrets manager, i.e. $ conjur login or conjur login -i $CONJUR_USER -p $CONJUR_PASS
+    cmds:
+      - |
+        if [ -n "$CONJUR_USER" ] && [ -n "$CONJUR_PASS" ]; then
+          conjur login -i $CONJUR_USER -p $CONJUR_PASS
+        else
+          conjur login
+        fi
+      - conjur whoami
+
+  # ============================================================
+  # SWA
+  # ============================================================
+
+  swa:extract:
+    desc: Extract SWA release tarball to swa-release/
+    cmds:
+      - bash ./scripts/extract-swa.sh
+  swa:prep:
+    desc: Prepare SWA release (extract helm charts, install provider, validate versions)
+    cmds:
+      - bash ./scripts/swa-release-prep.sh
+  swa:mac-fix-tf-provider:
+    desc: Remove tf provider binary from quarantine (Mac ONLY)
+    cmds:
+      - find $HOME/.terraform.d/plugins/registry.terraform.io/cyberark/swa/ -type f | xargs xattr -d com.apple.quarantine || true
+
+  swa:install-provider:
+    desc: Install SWA provider to Secrets Manager
+    cmds:
+      - bash ./scripts/install-swa-provider.sh
+  swa:delete-provider:
+    desc: Delete SWA provider from Secrets Manager
+    cmds:
+      - bash ./scripts/delete-swa-provider.sh
+
+  swa:install-server:
+    desc: Install SWA server to k8s
+    cmds:
+      - bash ./scripts/install-swa-server-k8s.sh
+  swa:delete-server:
+    desc: Delete SWA server from k8s
+    cmds:
+      - bash ./scripts/delete-swa-server.sh
+
+  swa:install-agent:
+    desc: Install SWA agent to k8s
+    cmds:
+      - bash ./scripts/install-swa-agent-k8s.sh
+  swa:delete-agent:
+    desc: Delete SWA agent from k8s
+    cmds:
+      - bash ./scripts/delete-swa-agent.sh
+  swa:terraform-cleanup:
+    desc: Delete terraform state
+    cmds:
+      - (cd ./terraform/environments/swa-provider && pwd && rm -rf .terraform .terraform.lock.hcl terraform.tfstate terraform.tfstate.backup)
+
+  swa:oidc-values:
+    desc: Get OIDC Info
+    cmds:
+      - bash ./scripts/oidc-values.sh
+
+  # ============================================================
+  # Kind
+  # ============================================================
+
+  kind:create:
+    desc: Create/start kind cluster
+    env:
+      TF_VAR_cluster_name:
+        sh: 'echo "$SWA_CLUSTER_NAME"'
+    dir: ./terraform/environments/kind
+    cmds:
+      - |
+        export TF_VAR_prefix="PROJECT_PREFIX"
+        terraform init && terraform apply -auto-approve
+  kind:destroy:
+    desc: Destroy kind cluster
+    env:
+      TF_VAR_cluster_name:
+        sh: 'echo "$SWA_CLUSTER_NAME"'
+    dir: ./terraform/environments/kind
+    cmds:
+      - |
+        export TF_VAR_prefix="PROJECT_PREFIX"
+        terraform destroy -auto-approve
+  kind:clean-terraform-state:
+    desc: Clean the terraform state
+    dir: ./terraform/environments/kind
+    cmds:
+      - terraform state list | xargs terraform state rm
+  kind:load-swa-images:
+    desc: Load the container images locally into kind
+    env:
+      TF_VAR_cluster_name:
+        sh: 'echo "$SWA_CLUSTER_NAME"'
+    cmds:
+      - bash ./scripts/kind-load-swa-images.sh
+  kind:load-app-image:
+    desc: Load the app image locally into kind
+    cmds:
+      - kind load docker-image $APP_NAME:$APP_TAG --name "$SWA_CLUSTER_NAME"
+  kind:list-images:
+    desc: List images loaded into kind
+    cmds:
+      - docker exec -it "$PROJECT_PREFIX-control-plane" crictl images
+
+  # ============================================================
+  # APP DEPLOYMENT
+  # ============================================================
+
+  app:render-policies:
+    desc: Render policy templates with environment variables
+    cmds:
+      - bash ./scripts/render-policies.sh
+
+  app:apply-jwt-authenticator:
+    desc: Load JWT authenticator policy and configure variables
+    deps: [conjur:login, app:render-policies]
+    cmds:
+      - bash ./scripts/apply-jwt-authenticator.sh
+
+  app:apply-workload-policies:
+    desc: Load workload group and authenticator grant policies
+    deps: [conjur:login, app:render-policies]
+    cmds:
+      - bash ./scripts/apply-workload-policies.sh
+
+  app:apply-secret-policies:
+    desc: Load  secrets policies
+    deps: [conjur:login, app:render-policies]
+    cmds:
+      - bash ./scripts/apply-secret-policies.sh
+
+  app:setup:
+    desc: Complete app setup (render + apply all policies)
+    deps: [conjur:login]
+    cmds:
+      - task: conjur:login
+      - task: app:render-policies
+      - task: app:apply-jwt-authenticator
+      - task: app:apply-workload-policies
+      - task: app:apply-secret-policies
+
+  app:deploy:
+    desc: Build, load, and deploy the JWT-SVID fetch demo app with Secrets Manager integration
+    cmds:
+      - bash ./scripts/app-build.sh
+      - bash ./scripts/app-deploy.sh
+      - echo "  1. Port-forward:" "kubectl port-forward -n demo-app deployment/demo-app 8080:8080"
+      - echo "  2. Access at http://localhost:8080"
+  app:uninstall:
+    desc: Uninstall demo app
+    cmds:
+      - helm uninstall -n $APP_NAMESPACE $APP_NAME
+
+  # ============================================================
+  # DEMO APPLICATION
+  # ============================================================
+
+  destroy-all:
+    desc: Destroy kind cluster and delete provider from Secrets Manager
+    cmds:
+      - task: conjur:login
+      - task: swa:delete-provider
+      - task: kind:destroy
+      - task: swa:terraform-cleanup
+
+  deploy-kind-swa:
+    desc: Create kind cluster, Secrets Mgr provider, SWA server/agent, and app
+    cmds:
+      - task: swa:extract
+      - task: swa:prep
+      - task: swa:mac-fix-tf-provider
+      - task: kind:create
+      - task: kind:load-swa-images
+      - task: conjur:login
+      - task: swa:install-provider
+      - task: swa:install-server
+      - task: swa:install-agent
+  deploy-app:
+    desc: Build and deploy demo app
+    cmds:
+      - task: app:setup
+      - task: app:deploy

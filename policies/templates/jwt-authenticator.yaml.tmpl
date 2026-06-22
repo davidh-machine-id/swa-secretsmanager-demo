@@ -1,0 +1,32 @@
+# JWT Authenticator Policy for SWA Workloads
+# conjur policy load -b conjur/authn-jwt -f jwt-authenticator.yaml
+
+- !policy
+  id: ${PROJECT_PREFIX}
+  body:
+    - !webservice
+      annotations:
+        description: JWT authenticator for SWA workloads
+
+    - !variable jwks-uri
+    - !variable issuer
+
+    - !variable token-app-property
+    - !variable identity-path
+    - !variable audience
+
+    # Group of applications that can authenticate using this JWT Authenticator
+    - !group apps
+
+    - !permit
+      role: !group apps
+      privilege: [read, authenticate]
+      resource: !webservice
+
+    - !webservice status
+
+    - !group operators
+    - !permit
+      role: !group operators
+      privilege: [read]
+      resource: !webservice status

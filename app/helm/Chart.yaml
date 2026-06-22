@@ -1,0 +1,14 @@
+apiVersion: v2
+name: demo-app
+description: Helm chart for SWA-enabled Conjur demo web app
+type: application
+version: 0.2.0
+appVersion: "0.2"
+
+keywords:
+  - swa
+  - conjur
+  - spiffe
+
+maintainers:
+  - name: Demo Team

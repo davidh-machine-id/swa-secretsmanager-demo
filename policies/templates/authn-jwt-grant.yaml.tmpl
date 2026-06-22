@@ -1,0 +1,5 @@
+# authn-jwt-grant.yaml
+# conjur policy load -b conjur/authn-jwt/${PROJECT_PREFIX} -f authn-jwt-grant.yaml
+- !grant
+  role: !group apps
+  member: !group /data/swa/trust-domains/${SWA_TRUST_DOMAIN}/workloads

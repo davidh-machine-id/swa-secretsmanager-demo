@@ -1,0 +1,13 @@
+# conjur policy load -b data/swa/trust-domains/<trust-domain> -f workloads-group.yaml
+- !group
+  id: workloads
+
+- !host
+  id: workloads/${SPIFFE_ID}
+  annotations:
+    description: ${PROJECT_PREFIX} workload
+    authn-jwt/${PROJECT_PREFIX}/sub: ${SPIFFE_ID}
+
+- !grant
+  role: !group workloads
+  member: !host workloads/${SPIFFE_ID}

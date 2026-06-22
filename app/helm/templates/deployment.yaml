@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Chart.Name }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  strategy:
+    type: {{ .Values.deployment.strategy.type }}
+    rollingUpdate:
+      maxSurge: {{ .Values.deployment.strategy.maxSurge }}
+      maxUnavailable: {{ .Values.deployment.strategy.maxUnavailable }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+        swa_nodegroup: {{ .Values.swa.nodegroup }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      restartPolicy: Always
+      containers:
+      - name: demo-app
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: CONJUR_APPLIANCE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Chart.Name }}-config
+              key: conjur_appliance_url
+        - name: CONJUR_ACCOUNT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Chart.Name }}-config
+              key: conjur_account
+        - name: CONJUR_AUTHN_JWT_SERVICE_ID
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Chart.Name }}-config
+              key: conjur_authn_jwt_service_id
+        - name: CONJUR_JWT_AUDIENCE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Chart.Name }}-config
+              key: conjur_jwt_audience
+        - name: CONJUR_SECRET_ID
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Chart.Name }}-config
+              key: conjur_secret_id
+        - name: SPIFFE_ENDPOINT_SOCKET
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Chart.Name }}-config
+              key: spiffe_endpoint_socket
+        {{- if .Values.probes.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.probes.livenessProbe.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.probes.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.probes.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.probes.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.probes.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.probes.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.probes.readinessProbe.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.probes.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.probes.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.probes.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.probes.readinessProbe.failureThreshold }}
+        {{- end }}
+        volumeMounts:
+        - name: swa-agent-socket
+          mountPath: /tmp/swa-agent/public
+          readOnly: true
+      volumes:
+      - name: swa-agent-socket
+        hostPath:
+          path: /tmp/swa-agent/public
+          type: Directory

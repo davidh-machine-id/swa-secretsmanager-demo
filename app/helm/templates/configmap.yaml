@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Chart.Name }}
+data:
+  conjur_appliance_url: {{ .Values.conjur.applianceUrl | quote }}
+  conjur_account: {{ .Values.conjur.account | quote }}
+  conjur_authn_jwt_service_id: {{ .Values.conjur.authnJwtServiceId | quote }}
+  conjur_jwt_audience: {{ .Values.conjur.jwtAudience | quote }}
+  conjur_secret_id: {{ .Values.conjur.secretId | quote }}
+  spiffe_endpoint_socket: {{ printf "unix://%s" .Values.swa.agentSocketPath | quote }}
