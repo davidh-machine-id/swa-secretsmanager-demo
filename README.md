@@ -6,15 +6,15 @@ A demonstration of CyberArk Secure Workload Access (SWA) integration with Secret
 
 - Go 1.26+ (for local development)
 - Docker
-- [Taskfile runner](https://taskfile.dev/docs/installation)
+- [Taskfile runner](<https://taskfile.dev/docs/installation>)
 - Kubernetes cluster (kind recommended for local)
   - Docker
   - Kind (Kubernetes in Docker)
 - Helm 3.x
 - CyberArk Secrets Manager SaaS tenant
   - [Create a service user](<https://docs.cyberark.com/snapshot/identity-administration/en/content/ispss/ispss-add-service-user.htm#Createaserviceuser>) and add the user to the ["Secret Manager – Conjur Cloud Admin"](<https://docs.cyberark.com/secrets-manager-saas/latest/en/content/conjurcloud/cl_usermanage.htm#SecretsManagerrolesandusergroups>) role.
-- SWA agent running in cluster
-- [Secrets Manager SaaS CLI](https://docs.cyberark.com/secrets-manager-saas/latest/en/content/conjurcloud/cli/cli-setup-new.htm)
+- [Terraform](<https://developer.hashicorp.com/terraform/install>) (tested with Terraform v1.15.6)
+- [Secrets Manager SaaS CLI](<https://docs.cyberark.com/secrets-manager-saas/latest/en/content/conjurcloud/cli/cli-setup-new.htm>)
   
 ## Quick Start
 
@@ -48,6 +48,26 @@ These variables must be set by the user:
    cp setup.env.example setup.env
    # Edit setup.env with your values
    ```
+
+- **Ensure that conjur version is v9.**
+
+```bash
+# Example:
+conjur --version
+Idira™ Secrets Manager CLI version 9.2.3-554b2c2
+```
+
+- **Ensure that conjur init is configured correctly.**
+
+To configure conjur with this demo, the simplest method is to use task.
+
+```bash
+# initialize conjur configuration
+task conjur:init
+
+# test the login
+task conjur:login
+```
 
 1. **Deploy Kind Cluster with SWA Provider, Server, and Agent:**
 
