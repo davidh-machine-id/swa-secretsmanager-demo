@@ -47,10 +47,6 @@ tasks:
     desc: Prepare SWA release (extract helm charts, install provider, validate versions)
     cmds:
       - bash ./scripts/swa-release-prep.sh
-  swa:mac-fix-tf-provider:
-    desc: Remove tf provider binary from quarantine (Mac ONLY)
-    cmds:
-      - find $HOME/.terraform.d/plugins/registry.terraform.io/cyberark/swa/ -type f | xargs xattr -d com.apple.quarantine || true
 
   swa:install-provider:
     desc: Install SWA provider to Secrets Manager
@@ -199,7 +195,6 @@ tasks:
     cmds:
       - task: swa:extract
       - task: swa:prep
-      - task: swa:mac-fix-tf-provider
       - task: kind:create
       - task: kind:load-swa-images
       - task: conjur:login
