@@ -23,7 +23,30 @@ tasks:
       - sh: test -n "${CONJUR_APPLIANCE_URL}"
         msg: "CONJUR_APPLIANCE_URL not set - update setup.env"
     cmds:
-      - conjur init saas -u $CONJUR_APPLIANCE_URL
+      - |
+        if [ -f "$HOME/.conjurrc" ]; then
+          if [ "$CONJURRC_FORCE_OVERWRITE" = "true" ]; then
+            echo "Backing up existing $HOME/.conjurrc to $HOME/.conjurrc.$(date +%Y%m%d%H%M%S).BAK"
+            mv "$HOME/.conjurrc" "$HOME/.conjurrc.$(date +%Y%m%d%H%M%S).BAK"
+          else
+            echo "$HOME/.conjurrc already exists - skipping"
+            echo "To force overwrite, run 'CONJURRC_FORCE_OVERWRITE=true task conjur:init'"
+            exit 0
+          fi
+        fi
+        conjur init saas -u $CONJUR_APPLIANCE_URL
+  conjur:init:force:
+    desc: Initialize secrets manager cli (use this one for ansible)
+    preconditions:
+      - sh: test -n "${CONJUR_APPLIANCE_URL}"
+        msg: "CONJUR_APPLIANCE_URL not set - update setup.env"
+    cmds:
+      - |
+        if [ -f "$HOME/.conjurrc" ]; then
+          echo "Backing up existing $HOME/.conjurrc to $HOME/.conjurrc.$(date +%Y%m%d%H%M%S).BAK"
+          mv "$HOME/.conjurrc" "$HOME/.conjurrc.$(date +%Y%m%d%H%M%S).BAK"
+        fi
+        conjur init saas -u $CONJUR_APPLIANCE_URL
   conjur:login:
     desc: Login to secrets manager, i.e. $ conjur login or conjur login -i $CONJUR_USER -p $CONJUR_PASS
     cmds:
